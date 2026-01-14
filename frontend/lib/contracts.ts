@@ -1,4 +1,5 @@
 // Contract addresses (deployed to Sepolia testnet)
+// Using proper EIP-55 checksum format
 export const CONTRACTS = {
     LoveToken: '0x23230dD04AA14A5c7d706bcbecb54Cd89248fEd8' as `0x${string}`,
     BurnMint: '0xE8C559Fb09FE8c31eB7dB3893C562B2601E6202a' as `0x${string}`,
