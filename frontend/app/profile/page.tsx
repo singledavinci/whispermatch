@@ -2,9 +2,21 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { CONTRACTS, PROFILE_REGISTRY_ABI } from '@/lib/contracts';
+
+// Pre-set avatar options
+const AVATAR_OPTIONS = [
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Bella',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=David',
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Emma',
+    'https://api.dicebear.com/7.x/big-smile/svg?seed=Happy',
+    'https://api.dicebear.com/7.x/big-smile/svg?seed=Joy',
+];
 
 export default function ProfilePage() {
     const { address, isConnected } = useAccount();
@@ -13,8 +25,11 @@ export default function ProfilePage() {
     const [interests, setInterests] = useState('');
     const [minLuv, setMinLuv] = useState('1');
     const [imageUrl, setImageUrl] = useState('');
+    const [uploadedImage, setUploadedImage] = useState('');
+    const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const { writeContract, data: txHash, isPending } = useWriteContract();
+    const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
     const { isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
     // Check if user has a profile
@@ -32,6 +47,26 @@ export default function ProfilePage() {
         functionName: 'getProfile',
         args: address ? [address] : undefined,
     });
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Convert to base64 for demo (in production, upload to IPFS/Pinata)
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const base64 = reader.result as string;
+                setUploadedImage(base64);
+                setImageUrl(base64);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const selectAvatar = (avatarUrl: string) => {
+        setImageUrl(avatarUrl);
+        setUploadedImage('');
+        setShowAvatarPicker(false);
+    };
 
     const createProfile = async () => {
         if (!bio || !age || !interests) {
@@ -52,15 +87,15 @@ export default function ProfilePage() {
             // Simulate IPFS hash (in production, use actual IPFS upload)
             const ipfsHash = `Qm${btoa(JSON.stringify(profileData)).substring(0, 44)}`;
 
-            writeContract({
+            await writeContract({
                 address: CONTRACTS.ProfileRegistry,
                 abi: PROFILE_REGISTRY_ABI,
                 functionName: 'createProfile',
-                args: [ipfsHash, BigInt(parseFloat(minLuv) * 1e18)],
+                args: [ipfsHash, BigInt(Math.floor(parseFloat(minLuv) * 1e18))],
             });
         } catch (error) {
-            console.error('Error:', error);
-            alert('Profile creation failed');
+            console.error('Error creating profile:', error);
+            alert(`Profile creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
 
@@ -81,15 +116,15 @@ export default function ProfilePage() {
 
             const ipfsHash = `Qm${btoa(JSON.stringify(profileData)).substring(0, 44)}`;
 
-            writeContract({
+            await writeContract({
                 address: CONTRACTS.ProfileRegistry,
                 abi: PROFILE_REGISTRY_ABI,
                 functionName: 'updateProfile',
                 args: [ipfsHash],
             });
         } catch (error) {
-            console.error('Error:', error);
-            alert('Profile update failed');
+            console.error('Error updating profile:', error);
+            alert(`Profile update failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     };
 
@@ -104,6 +139,8 @@ export default function ProfilePage() {
             </div>
         );
     }
+
+    const displayImage = uploadedImage || imageUrl;
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-rose-900">
@@ -142,33 +179,85 @@ export default function ProfilePage() {
                     {/* Profile Form */}
                     <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 space-y-6">
 
-                        {/* Image URL (placeholder for IPFS upload) */}
+                        {/* Profile Image Section */}
                         <div>
-                            <label className="block text-white font-semibold mb-2">Profile Image URL</label>
-                            <input
-                                type="text"
-                                value={imageUrl}
-                                onChange={(e) => setImageUrl(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500"
-                                placeholder="https://example.com/your-photo.jpg"
-                            />
-                            <p className="text-sm text-gray-400 mt-1">In production, we'd upload to IPFS</p>
-                        </div>
+                            <label className="block text-white font-semibold mb-3">Profile Picture</label>
 
-                        {imageUrl && (
-                            <div className="flex justify-center">
-                                <img
-                                    src={imageUrl}
-                                    alt="Profile preview"
-                                    className="w-32 h-32 rounded-full object-cover border-4 border-pink-500"
-                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                            {/* Current image preview */}
+                            <div className="flex justify-center mb-4">
+                                {displayImage ? (
+                                    <motion.img
+                                        initial={{ scale: 0.8, opacity: 0 }}
+                                        animate={{ scale: 1, opacity: 1 }}
+                                        src={displayImage}
+                                        alt="Profile preview"
+                                        className="w-32 h-32 rounded-full object-cover border-4 border-pink-500 shadow-xl"
+                                        onError={(e) => { (e.target as HTMLImageElement).src = AVATAR_OPTIONS[0]; }}
+                                    />
+                                ) : (
+                                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-4xl">
+                                        👤
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Image selection buttons */}
+                            <div className="flex gap-3 flex-wrap justify-center">
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
+                                >
+                                    📤 Upload Photo
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+                                    className="px-4 py-2 bg-white/10 text-white border border-white/20 rounded-lg hover:bg-white/20 transition-all"
+                                >
+                                    🎨 Choose Avatar
+                                </button>
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileUpload}
+                                    accept="image/*"
+                                    className="hidden"
                                 />
                             </div>
-                        )}
+
+                            {/* Avatar picker */}
+                            {showAvatarPicker && (
+                                <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    className="mt-4 grid grid-cols-4 gap-3"
+                                >
+                                    {AVATAR_OPTIONS.map((avatar, idx) => (
+                                        <button
+                                            key={idx}
+                                            type="button"
+                                            onClick={() => selectAvatar(avatar)}
+                                            className="relative group"
+                                        >
+                                            <img
+                                                src={avatar}
+                                                alt={`Avatar ${idx + 1}`}
+                                                className="w-full aspect-square rounded-full border-2 border-white/20 hover:border-pink-500 transition-all cursor-pointer hover:scale-110"
+                                            />
+                                        </button>
+                                    ))}
+                                </motion.div>
+                            )}
+
+                            <p className="text-sm text-gray-400 mt-2 text-center">
+                                Choose an avatar or upload your own photo
+                            </p>
+                        </div>
 
                         {/* Age */}
                         <div>
-                            <label className="block text-white font-semibold mb-2">Age</label>
+                            <label className="block text-white font-semibold mb-2">Age *</label>
                             <input
                                 type="number"
                                 value={age}
@@ -177,31 +266,35 @@ export default function ProfilePage() {
                                 placeholder="25"
                                 min="18"
                                 max="100"
+                                required
                             />
                         </div>
 
                         {/* Bio */}
                         <div>
-                            <label className="block text-white font-semibold mb-2">Bio</label>
+                            <label className="block text-white font-semibold mb-2">Bio *</label>
                             <textarea
                                 value={bio}
                                 onChange={(e) => setBio(e.target.value)}
                                 rows={4}
+                                maxLength={500}
                                 className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500 resize-none"
                                 placeholder="Tell us about yourself... What makes you unique?"
+                                required
                             />
                             <p className="text-sm text-gray-400 mt-1">{bio.length}/500 characters</p>
                         </div>
 
                         {/* Interests */}
                         <div>
-                            <label className="block text-white font-semibold mb-2">Interests (comma-separated)</label>
+                            <label className="block text-white font-semibold mb-2">Interests (comma-separated) *</label>
                             <input
                                 type="text"
                                 value={interests}
                                 onChange={(e) => setInterests(e.target.value)}
                                 className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500"
                                 placeholder="Photography, Travel, Music, Cooking"
+                                required
                             />
                             <div className="flex flex-wrap gap-2 mt-2">
                                 {interests.split(',').filter(i => i.trim()).map((interest, idx) => (
@@ -233,6 +326,15 @@ export default function ProfilePage() {
                             </div>
                         )}
 
+                        {/* Error Display */}
+                        {writeError && (
+                            <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                                <p className="text-red-300 text-sm">
+                                    ❌ Error: {writeError.message}
+                                </p>
+                            </div>
+                        )}
+
                         {/* Submit Button */}
                         <button
                             onClick={hasProfile ? updateProfile : createProfile}
@@ -240,7 +342,7 @@ export default function ProfilePage() {
                             className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-2xl hover:shadow-pink-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {isPending
-                                ? 'Processing...'
+                                ? 'Processing Transaction...'
                                 : hasProfile
                                     ? 'Update Profile'
                                     : 'Create Profile (Requires 1 LUV)'
@@ -248,7 +350,11 @@ export default function ProfilePage() {
                         </button>
 
                         {isSuccess && (
-                            <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"
+                            >
                                 <p className="text-green-300 mb-2">
                                     ✅ Profile {hasProfile ? 'updated' : 'created'} successfully!
                                 </p>
@@ -258,7 +364,7 @@ export default function ProfilePage() {
                                 >
                                     Start Browsing Profiles →
                                 </a>
-                            </div>
+                            </motion.div>
                         )}
 
                         {/* Privacy Notice */}
