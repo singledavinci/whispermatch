@@ -92,6 +92,7 @@ export default function ProfilePage() {
                 abi: PROFILE_REGISTRY_ABI,
                 functionName: 'createProfile',
                 args: [ipfsHash, BigInt(Math.floor(parseFloat(minLuv) * 1e18))],
+                gas: BigInt(500000), // Explicit gas limit
             });
         } catch (error) {
             console.error('Error creating profile:', error);
@@ -121,6 +122,7 @@ export default function ProfilePage() {
                 abi: PROFILE_REGISTRY_ABI,
                 functionName: 'updateProfile',
                 args: [ipfsHash],
+                gas: BigInt(300000), // Explicit gas limit
             });
         } catch (error) {
             console.error('Error updating profile:', error);
