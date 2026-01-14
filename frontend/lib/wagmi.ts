@@ -7,7 +7,7 @@ export const wagmiConfig = getDefaultConfig({
     projectId: '0f3937bfe2b9c74bdf919eb3794abb9b',
     chains: [sepolia],
     transports: {
-        [sepolia.id]: http(),
+        [sepolia.id]: http('https://eth-sepolia.g.alchemy.com/v2/-agtYcc_8KdzGNGjtlWDQ'),
     },
     ssr: true,
 });
