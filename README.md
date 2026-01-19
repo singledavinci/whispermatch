@@ -1,168 +1,148 @@
-# WhisperMatch - Deployment Complete! 🎉
+# WhisperMatch
 
-## What We Built
+Privacy-first Web3 dating DApp built with Foundry, Next.js 16, and RainbowKit.
 
-A **complete privacy-first decentralized dating DApp** with zero-knowledge proofs, IPFS profiles, and encrypted messaging.
+## 🚀 Features
 
----
-
-## ✅ Completed Features
-
-### Smart Contracts (All Deployed to Anvil!)
-
-1. **LoveToken (LUV)** - ERC20 token  
-   - Address: `0x5fbdb2315678afecb367f032d93f642f64180aa3`
-
-2. **BurnMint** - Privacy mechanism
-   - Address: `0xe7f1725e7734ce288f8367e1bb143e90bb3f0512`
-   - Burn ETH → Mint LUV to unlinkable address
-   - 10-block delay for anonymity
-   - 1 ETH = 1000 LUV
-
-3. **ProfileRegistry** - Decentralized profiles
-   - Address: `0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9`
-   - IPFS storage, LUV-based access control
-
-4. **MatchRegistry** - Like & Match system
-   - Address: `0xdc64a140aa3e981100a9beca4e685f962f0cf6c9`
-   - Mutual matching, privacy-preserving
-
-5. **MessageRegistry** - Encrypted messaging ✨
-   - Address: `0x5fc8d32690cc91d4c39d9d3abcbd16989f875707`
-   - IPFS-encrypted messages between matches
-
-**Test Results: 51/51 passing!** ✅
-
-### Frontend Pages (Complete!)
-
-1. **Landing Page** (`/`) - Hero with wallet connection
-2. **Anonymous Funding** (`/fund`) - 3-step burn/mint wizard
-3. **Profile Management** (`/profile`) - Create/edit IPFS profiles
-4. **Browse Profiles** (`/browse`) - Swipeable card interface
-5. **Matches & Chat** (`/matches`) - Encrypted messaging ✨
-
----
-
-## 🚀 Quick Start
-
-### 1. Prerequisites
-- Anvil running on `localhost:8545` ✅
-- MetaMask installed
-   - Private key: `0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80`
-   - This account has ETH on Anvil
-
-2. **Add Anvil Network to MetaMask**
-   - Network name: Anvil
-   - RPC URL: `http://localhost:8545`
-   - Chain ID: `31337`
-   - Currency: ETH
-
-3. **Start Frontend** (in new terminal)
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-
-4. **Visit**: http://localhost:3000
-
----
-
-## 📝 Test Flow
-
-1. Connect wallet with MetaMask
-2. **Anonymous Funding**:
-   - Burn 0.1 ETH from account
-   - Create secret + new address
-   - Wait 10 blocks  
-   - Mint 100 LUV to new address
-3. **Create Profile**: Upload to IPFS, set bio
-4. **Browse & Match**: Swipe on profiles, match!
-
----
+- **Anonymous Funding**: Burn ETH and mint LUV tokens to a fresh address
+- **Decentralized Profiles**: IPFS storage with multi-photo galleries
+- **Privacy-First Matching**: Zero-knowledge proof concepts for anonymous interactions
+- **Real-Time Events**: Blockchain event listeners for instant match notifications
+- **Modern UI**: Framer Motion animations, glassmorphism, and responsive design
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────┐
-│  Next.js 16 UI  │
-└────────┬────────┘
-         │ wagmi/viem
-┌────────▼────────────────────┐
-│  Smart Contracts (Anvil)    │
-│  • LoveToken (ERC20)       │
-│  • BurnMint (ZK Privacy)   │
-│  • ProfileRegistry (IPFS)  │
-│  • MatchRegistry (Match)   │
-└─────────────────────────────┘
-```
+### Smart Contracts (Foundry)
+- `LoveToken.sol` - ERC20 token for app economy
+- `BurnMint.sol` - Privacy-preserving burn/mint mechanism
+- `ProfileRegistry.sol` - Decentralized profile management with pagination
+- `MatchRegistry.sol` - Matching and like system
+- `MessageRegistry.sol` - Encrypted messaging
 
----
+### Frontend (Next.js 16)
+- **Framework**: Next.js 16 with App Router
+- **Blockchain**: RainbowKit + wagmi + viem
+- **Styling**: Tailwind CSS 4
+- **Animations**: Framer Motion
+- **Storage**: IPFS via Pinata
+- **Validation**: Zod + react-hook-form
 
-## 📊 Test Results
+## 📦 Installation
 
-**Smart Contracts**: 42/42 Tests Passing ✅
-- BurnMint: 14/14 (including fuzz tests)
-- ProfileRegistry: 15/15
-- MatchRegistry: 13/13
+### Prerequisites
+- Node.js 20+
+- Foundry
+- Git
 
-**Gas Used**: ~3.3M for full deployment
+### Setup
 
----
+```bash
+# Clone repository
+git clone https://github.com/yourusername/whispermatch.git
+cd whispermatch
 
-## 🎯 Next Steps
+# Install frontend dependencies
+cd frontend
+npm install --legacy-peer-deps
 
-To complete the MVP:
+# Install Foundry dependencies
+cd ../contracts
+forge install
 
-1. **Fix Frontend Build** - Debug the Next.js build error
-2. **Create Fund Page** - Implement burn/mint UI
-3. **Create Profile Page** - IPFS upload interface
-4. **Create Browse Page** - Swipe interface
-5. **Add IPFS** - Integrate Pinata or local IPFS
-6. **Testing** - E2E browser tests
-
----
-
-## 🔒 Privacy Features
-
-- ✅ No on-chain link between burn and mint addresses
-- ✅ 10-block delay prevents timing attacks  
-- ✅ Commitment + nullifier scheme
-- ✅ Decentralized profile storage (IPFS)
-- ✅ Minimal on-chain data
-
----
-
-## 📁 Project Structure
-
-```
-whispermatch/
-├── contracts/
-│   ├── src/
-│   │   ├── LoveToken.sol ✅
-│   │   ├── BurnMint.sol ✅
-│   │   ├── ProfileRegistry.sol ✅
-│   │   └── MatchRegistry.sol ✅
-│   ├── test/ (42 tests) ✅
-│   └── script/Deploy.s.sol ✅
-└── frontend/
-    ├── app/page.tsx (Landing) ✅
-    ├── lib/
-    │   ├── contracts.ts (ABIs) ✅
-    │   └── wagmi.ts (Config) ✅
-    └── components/
-        └── Providers.tsx ✅
+# Configure environment
+cp frontend/.env.example frontend/.env.local
+cp contracts/.env.example contracts/.env
 ```
 
----
+### Environment Variables
 
-## 🎨 Tech Stack
+**Frontend** (`frontend/.env.local`):
+```
+NEXT_PUBLIC_PINATA_API_KEY=your_key
+NEXT_PUBLIC_PINATA_SECRET_API_KEY=your_secret
+```
 
-- **Smart Contracts**: Solidity 0.8.33 + Foundry
-- **Frontend**: Next.js 16, TypeScript, Tailwind
-- **Web3**: wagmi v2, viem v2, RainbowKit v2
-- **Storage**: IPFS (planned)
-- **Local Chain**: Anvil (Foundry)
+**Contracts** (`contracts/.env`):
+```
+SEPOLIA_RPC_URL=your_alchemy_url
+PRIVATE_KEY=your_private_key
+ETHERSCAN_API_KEY=your_etherscan_key
+```
 
----
+## 🧪 Testing
 
-**Status**: Core infrastructure complete! Ready for UI implementation and testing.
+### Smart Contracts
+```bash
+cd contracts
+forge test -vvv
+forge coverage
+```
+
+### Frontend
+```bash
+cd frontend
+npm run lint
+npm run build
+```
+
+## 🔧 Development
+
+```bash
+# Run frontend dev server
+cd frontend
+npm run dev
+
+# Deploy contracts to Sepolia
+cd contracts
+./deploy.sh
+
+# Verify contracts on Etherscan
+./verify.sh
+```
+
+## 📊 Test Coverage
+
+- **Smart Contracts**: 38+ tests across 3 core contracts
+  - BurnMint: 18 tests
+  - ProfileRegistry: 12 tests
+  - MatchRegistry: 8 tests
+
+## 🌐 Deployment
+
+**Frontend**: Auto-deployed to Vercel on push to `main`  
+**Contracts**: Deployed to Sepolia testnet
+
+- **Live App**: https://whispermatch.vercel.app
+- **Contract Addresses**: See `DEPLOYMENT_SUCCESS.md`
+
+## 📝 Documentation
+
+- [Setup Guide](SETUP_GUIDE.md)
+- [Deployment Guide](PUBLIC_DEPLOYMENT.md)
+- [Architecture Overview](docs/architecture.md)
+
+## 🔒 Security
+
+- Comprehensive test coverage
+- TypeScript strict mode
+- Form validation with Zod
+- Reentrancy protection considerations
+- Privacy-preserving mechanisms
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests
+5. Submit a pull request
+
+## 📄 License
+
+MIT License - see LICENSE file for details
+
+## 🙏 Acknowledgments
+
+- Built with Foundry, Next.js, RainbowKit
+- Inspired by modern dating apps
+- Privacy-first design principles
