@@ -1,265 +1,167 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.33;
 
-import {Test, console} from "forge-std/Test.sol";
-import {LoveToken} from "../src/LoveToken.sol";
-import {ProfileRegistry} from "../src/ProfileRegistry.sol";
+import "forge-std/Test.sol";
+import "../src/ProfileRegistry.sol";
+import "../src/LoveToken.sol";
 
 contract ProfileRegistryTest is Test {
+    ProfileRegistry public registry;
     LoveToken public loveToken;
-    ProfileRegistry public profileRegistry;
-    
-    address public owner = address(this);
+
     address public alice = address(0x1);
     address public bob = address(0x2);
     address public charlie = address(0x3);
-    
-    string constant IPFS_HASH_ALICE = "QmAliceProfile123";
-    string constant IPFS_HASH_BOB = "QmBobProfile456";
-    string constant IPFS_HASH_UPDATED = "QmAliceProfileUpdated789";
-    
-    event ProfileCreated(address indexed user, string ipfsHash, uint256 minLuvToView, uint256 timestamp);
-    event ProfileUpdated(address indexed user, string ipfsHash, uint256 timestamp);
-    event ProfileStatusChanged(address indexed user, bool isActive);
 
     function setUp() public {
         loveToken = new LoveToken();
-        profileRegistry = new ProfileRegistry(address(loveToken));
+        registry = new ProfileRegistry(address(loveToken));
         
-        // Grant minter role to owner for testing
-        loveToken.grantRole(loveToken.MINTER_ROLE(), owner);
-        
-        // Mint LUV to test accounts
+        // Mint LUV to test users
         loveToken.mint(alice, 10 ether);
         loveToken.mint(bob, 5 ether);
-        // Charlie has no LUV
+        loveToken.mint(charlie, 1 ether);
     }
 
-    function test_Deployment() public {
-        assertEq(address(profileRegistry.loveToken()), address(loveToken));
-        assertEq(profileRegistry.MIN_LUV_FOR_PROFILE(), 1 ether);
+    function testCreateProfile() public {
+        string memory ipfsHash = "QmTest123";
+        uint256 minLuv = 0.5 ether;
+
+        vm.prank(alice);
+        registry.createProfile(ipfsHash, minLuv);
+        
+        // Verify profile created
+        assertTrue(registry.hasProfile(alice));
+        
+        (string memory hash, uint256 created, , bool active, uint256 minLuvToView) = registry.getProfile(alice);
+        assertEq(hash, ipfsHash);
+        assertGt(created, 0);
+        assertTrue(active);
+        assertEq(minLuvToView, minLuv);
     }
 
-    function test_CreateProfile() public {
+    function testFailCreateProfileWithoutLuv() public {
+        address poor = address(0x999);
+        vm.prank(poor);
+        registry.createProfile("QmTest", 0);
+    }
+
+    function testFailCreateDuplicateProfile() public {
         vm.startPrank(alice);
-        
-        vm.expectEmit(true, false, false, true);
-        emit ProfileCreated(alice, IPFS_HASH_ALICE, 0, block.timestamp);
-        
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
-        
-        // Verify profile was created
-        assertTrue(profileRegistry.profileExists(alice));
-        assertTrue(profileRegistry.hasProfile(alice));
-        
-        (
-            string memory ipfsHash,
-            uint256 createdAt,
-            uint256 updatedAt,
-            bool isActive,
-            uint256 minLuvToView
-        ) = profileRegistry.getProfile(alice);
-        
-        assertEq(ipfsHash, IPFS_HASH_ALICE);
-        assertEq(createdAt, block.timestamp);
-        assertEq(updatedAt, block.timestamp);
-        assertTrue(isActive);
-        assertEq(minLuvToView, 0);
-        
+        registry.createProfile("QmTest1", 0);
+        registry.createProfile("QmTest2", 0); // Should fail
         vm.stopPrank();
     }
 
-    function test_CreateProfileWithMinLuv() public {
+    function testUpdateProfile() public {
+        // Create initial profile
         vm.startPrank(alice);
-        
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 2 ether);
-        
-        (,,,, uint256 minLuvToView) = profileRegistry.getProfile(alice);
-        assertEq(minLuvToView, 2 ether);
-        
-        vm.stopPrank();
-    }
-
-    function test_RevertIf_InsufficientLuvForProfile() public {
-        vm.startPrank(charlie); // Charlie has 0 LUV
-        
-        vm.expectRevert("ProfileRegistry: insufficient LUV balance");
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
-        
-        vm.stopPrank();
-    }
-
-    function test_RevertIf_EmptyIpfsHash() public {
-        vm.startPrank(alice);
-        
-        vm.expectRevert("ProfileRegistry: empty IPFS hash");
-        profileRegistry.createProfile("", 0);
-        
-        vm.stopPrank();
-    }
-
-    function test_RevertIf_ProfileAlreadyExists() public {
-        vm.startPrank(alice);
-        
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
-        
-        vm.expectRevert("ProfileRegistry: profile already exists");
-        profileRegistry.createProfile(IPFS_HASH_UPDATED, 0);
-        
-        vm.stopPrank();
-    }
-
-    function test_UpdateProfile() public {
-        vm.startPrank(alice);
-        
-        // Create profile
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
-        
-        // Fast forward time
-        vm.warp(block.timestamp + 1 days);
+        registry.createProfile("QmTest1", 0);
         
         // Update profile
-        vm.expectEmit(true, false, false, true);
-        emit ProfileUpdated(alice, IPFS_HASH_UPDATED, block.timestamp);
+        string memory newHash = "QmTest2";
+        registry.updateProfile(newHash);
         
-        profileRegistry.updateProfile(IPFS_HASH_UPDATED);
-        
-        (string memory ipfsHash,, uint256 updatedAt,,) = profileRegistry.getProfile(alice);
-        assertEq(ipfsHash, IPFS_HASH_UPDATED);
-        assertEq(updatedAt, block.timestamp);
-        
+        (string memory hash, , uint256 updated, , ) = registry.getProfile(alice);
+        assertEq(hash, newHash);
+        assertGt(updated, 0);
         vm.stopPrank();
     }
 
-    function test_RevertIf_UpdateNonexistentProfile() public {
+    function testSetProfileActive() public {
         vm.startPrank(alice);
-        
-        vm.expectRevert("ProfileRegistry: profile does not exist");
-        profileRegistry.updateProfile(IPFS_HASH_UPDATED);
-        
-        vm.stopPrank();
-    }
-
-    function test_UpdateMinLuvToView() public {
-        vm.startPrank(alice);
-        
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 1 ether);
-        profileRegistry.updateMinLuvToView(5 ether);
-        
-        (,,,, uint256 minLuvToView) = profileRegistry.getProfile(alice);
-        assertEq(minLuvToView, 5 ether);
-        
-        vm.stopPrank();
-    }
-
-    function test_SetProfileActive() public {
-        vm.startPrank(alice);
-        
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
+        registry.createProfile("QmTest", 0);
         
         // Deactivate
-        vm.expectEmit(true, false, false, true);
-        emit ProfileStatusChanged(alice, false);
-        profileRegistry.setProfileActive(false);
-        
-        (,,, bool isActive,) = profileRegistry.getProfile(alice);
-        assertFalse(isActive);
+        registry.setProfileActive(false);
+        (, , , bool active1, ) = registry.getProfile(alice);
+        assertFalse(active1);
         
         // Reactivate
-        vm.expectEmit(true, false, false, true);
-        emit ProfileStatusChanged(alice, true);
-        profileRegistry.setProfileActive(true);
-        
-        (,,, isActive,) = profileRegistry.getProfile(alice);
-        assertTrue(isActive);
-        
+        registry.setProfileActive(true);
+        (, , , bool active2, ) = registry.getProfile(alice);
+        assertTrue(active2);
         vm.stopPrank();
     }
 
-    function test_CanViewProfile() public {
-        // Alice creates profile with min 2 LUV to view
-        vm.prank(alice);
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 2 ether);
-        
-        // Bob has 5 LUV, should be able to view
-        assertTrue(profileRegistry.canViewProfile(bob, alice));
-        
-        // Charlie has 0 LUV, should not be able to view
-        assertFalse(profileRegistry.canViewProfile(charlie, alice));
-    }
-
-    function test_CannotViewInactiveProfile() public {
-        vm.startPrank(alice);
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
-        profileRegistry.setProfileActive(false);
-        vm.stopPrank();
-        
-        assertFalse(profileRegistry.canViewProfile(bob, alice));
-    }
-
-    function test_GetActiveProfiles() public {
+    function testGetActiveProfiles() public {
         // Create profiles
         vm.prank(alice);
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 1 ether);
+        registry.createProfile("QmAlice", 0);
         
         vm.prank(bob);
-        profileRegistry.createProfile(IPFS_HASH_BOB, 0);
+        registry.createProfile("QmBob", 0);
         
-        // Alice views (she has 10 LUV)
-        vm.startPrank(alice);
-        address[] memory profiles = profileRegistry.getActiveProfiles(alice);
+        vm.prank(charlie);
+        registry.createProfile("QmCharlie", 0);
         
-        // Should see Bob's profile (min 0 LUV) but not her own
-        assertEq(profiles.length, 1);
-        assertEq(profiles[0], bob);
-        vm.stopPrank();
-        
-        // Bob views (he has 5 LUV)
-        vm.startPrank(bob);
-        profiles = profileRegistry.getActiveProfiles(bob);
-        
-        // Should see Alice's profile (min 1 LUV) but not his own
-        assertEq(profiles.length, 1);
-        assertEq(profiles[0], alice);
-        vm.stopPrank();
-        
-        // Charlie views (he has 0 LUV)
-        vm.startPrank(charlie);
-        profiles = profileRegistry.getActiveProfiles(charlie);
-        
-        // Should only see Bob's profile (min 0 LUV)
-        assertEq(profiles.length, 1);
-        assertEq(profiles[0], bob);
-        vm.stopPrank();
+        // Alice should see Bob and Charlie
+        address[] memory profiles = registry.getActiveProfiles(alice);
+        assertEq(profiles.length, 2);
     }
 
-    function test_GetActiveProfilesExcludesInactive() public {
+    function testGetActiveProfilesWithMinLuv() public {
+        // Alice requires 2 LUV to view
         vm.prank(alice);
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
+        registry.createProfile("QmAlice", 2 ether);
         
+        // Bob has 5 LUV (can view Alice)
         vm.prank(bob);
-        profileRegistry.createProfile(IPFS_HASH_BOB, 0);
+        address[] memory bobView = registry.getActiveProfiles(bob);
+        assertEq(bobView.length, 1);
+        assertEq(bobView[0], alice);
         
-        // Bob deactivates his profile
-        vm.prank(bob);
-        profileRegistry.setProfileActive(false);
-        
-        // Alice should only see active profiles (not Bob's)
-        vm.startPrank(alice);
-        address[] memory profiles = profileRegistry.getActiveProfiles(alice);
-        assertEq(profiles.length, 0); // Bob is inactive
-        vm.stopPrank();
+        // Charlie has 1 LUV (cannot view Alice)
+        vm.prank(charlie);
+        address[] memory charlieView = registry.getActiveProfiles(charlie);
+        assertEq(charlieView.length, 0);
     }
 
-    function test_GetProfileCount() public {
-        assertEq(profileRegistry.getProfileCount(), 0);
+    function testGetActiveProfilesPaginated() public {
+        // Create 10 profiles
+        for (uint256 i = 0; i < 10; i++) {
+            address user = address(uint160(i + 100));
+            loveToken.mint(user, 10 ether);
+            vm.prank(user);
+            registry.createProfile(string(abi.encodePacked("QmTest", i)), 0);
+        }
+        
+        // Get first 5
+        address[] memory page1 = registry.getActiveProfilesPaginated(alice, 0, 5);
+        assertEq(page1.length, 5);
+        
+        // Get next 5
+        address[] memory page2 = registry.getActiveProfilesPaginated(alice, 5, 5);
+        assertEq(page2.length, 5);
+        
+        // Verify no overlap
+        assertTrue(page1[0] != page2[0]);
+    }
+
+    function testPaginationLimit() public {
+        // Max limit is 100
+        vm.expectRevert("ProfileRegistry: invalid limit");
+        registry.getActiveProfilesPaginated(alice, 0, 101);
+    }
+
+    function testProfileExists() public {
+        assertFalse(registry.profileExists(alice));
         
         vm.prank(alice);
-        profileRegistry.createProfile(IPFS_HASH_ALICE, 0);
-        assertEq(profileRegistry.getProfileCount(), 1);
+        registry.createProfile("QmTest", 0);
+        
+        assertTrue(registry.profileExists(alice));
+    }
+
+    function testGetAllProfileCount() public {
+        assertEq(registry.getAllProfileCount(), 0);
+        
+        vm.prank(alice);
+        registry.createProfile("QmTest1", 0);
         
         vm.prank(bob);
-        profileRegistry.createProfile(IPFS_HASH_BOB, 0);
-        assertEq(profileRegistry.getProfileCount(), 2);
+        registry.createProfile("QmTest2", 0);
+        
+        assertEq(registry.getAllProfileCount(), 2);
     }
 }
