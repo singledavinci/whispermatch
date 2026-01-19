@@ -2,7 +2,7 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { parseEther, keccak256, encodePacked } from 'viem';
 import { CONTRACTS, BURN_MINT_ABI } from '@/lib/contracts';
@@ -17,6 +17,29 @@ export default function FundPage() {
 
     const { writeContract, data: txHash, isPending } = useWriteContract();
     const { isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+
+    // Persist funding state to localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem('whispermatch_funding_state');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            if (parsed.secret) setSecret(parsed.secret);
+            if (parsed.newWalletAddress) setNewWalletAddress(parsed.newWalletAddress);
+            if (parsed.commitmentHash) setCommitmentHash(parsed.commitmentHash);
+            if (parsed.ethAmount) setEthAmount(parsed.ethAmount);
+            if (parsed.step) setStep(parsed.step);
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem('whispermatch_funding_state', JSON.stringify({
+            secret,
+            newWalletAddress,
+            commitmentHash,
+            ethAmount,
+            step
+        }));
+    }, [secret, newWalletAddress, commitmentHash, ethAmount, step]);
 
     const generateSecret = () => {
         const randomSecret = `whispermatch_${Date.now()}_${Math.random().toString(36).substring(7)}`;
@@ -47,6 +70,7 @@ export default function FundPage() {
                 functionName: 'burnAndCommit',
                 args: [commitment],
                 value: amount,
+                gas: BigInt(300000), // Explicit gas limit
             });
         } catch (error) {
             console.error('Error:', error);
@@ -69,6 +93,7 @@ export default function FundPage() {
                 abi: BURN_MINT_ABI,
                 functionName: 'mintWithProof',
                 args: [secretHash, newWalletAddress as `0x${string}`, amount],
+                gas: BigInt(500000), // Explicit gas limit
             });
         } catch (error) {
             console.error('Error:', error);
@@ -287,10 +312,10 @@ function Step({ number, title, active, completed }: { number: number; title: str
         <div className="flex flex-col items-center">
             <div
                 className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all ${completed
-                        ? 'bg-green-500 text-white'
-                        : active
-                            ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/50'
-                            : 'bg-white/10 text-gray-400'
+                    ? 'bg-green-500 text-white'
+                    : active
+                        ? 'bg-gradient-to-r from-pink-500 to-purple-600 text-white shadow-lg shadow-pink-500/50'
+                        : 'bg-white/10 text-gray-400'
                     }`}
             >
                 {completed ? '✓' : number}

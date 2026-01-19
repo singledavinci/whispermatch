@@ -27,6 +27,7 @@ export default function BrowsePage() {
                 abi: MATCH_REGISTRY_ABI,
                 functionName: 'sendLike',
                 args: [profileAddress as `0x${string}`],
+                gas: BigInt(200000), // Explicit gas limit
             });
 
             // Move to next profile

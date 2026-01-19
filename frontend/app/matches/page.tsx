@@ -43,6 +43,7 @@ export default function MatchesPage() {
                 abi: MESSAGE_REGISTRY_ABI,
                 functionName: 'sendMessage',
                 args: [selectedMatch as `0x${string}`, ipfsHash],
+                gas: BigInt(250000), // Explicit gas limit
             });
 
             setMessageText('');
