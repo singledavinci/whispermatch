@@ -1,11 +1,11 @@
 // Contract addresses (deployed to Sepolia testnet)
 // EXACT EIP-55 checksums from Etherscan - DO NOT modify casing!
 export const CONTRACTS = {
-    LoveToken: '0x23230dD04AA14A5c7d706bcbecb54Cd89248fEd8' as `0x${string}`,
-    BurnMint: '0xE8C559Fb09FE8c31eB7dB3893C562B2601E6202a' as `0x${string}`,
-    ProfileRegistry: '0x5b4189A64F632572e18ab2ef1eb0C775D12baf79' as `0x${string}`,
-    MatchRegistry: '0xdd3F195CDc23B9C6D320e315e897051E58d5B652' as `0x${string}`,
-    MessageRegistry: '0xB9643Cdc38064bC28Ac50bb6baD133e36378f4cf' as `0x${string}`,
+    LoveToken: '0xB4e591f05057A7873AC7993BE12eB18a42B8c999' as `0x${string}`,
+    BurnMint: '0x8b016E6a69c789b1e1824E63d0165AEB9b7B809d' as `0x${string}`,
+    ProfileRegistry: '0x28818cd3F3cE01fe7DF8583239F363B112f07429' as `0x${string}`,
+    MatchRegistry: '0xAB9DEBd7bBb9C8aBC271469194e4b58c41f1c66E' as `0x${string}`,
+    MessageRegistry: '0x600943981BE410ddeAC300944006A34F5ba4A0E8' as `0x${string}`,
 } as const;
 
 // LoveToken ABI (minimal for demo)

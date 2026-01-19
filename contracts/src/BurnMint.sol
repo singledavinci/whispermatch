@@ -129,8 +129,8 @@ contract BurnMint {
         // Mark as spent
         nullifiers[nullifier] = true;
         
-        // Calculate LUV amount to mint
-        uint256 luvAmount = (amount * ETH_TO_LUV_RATE) / 1 ether;
+        // Calculate LUV amount to mint (correct for 18 decimals)
+        uint256 luvAmount = amount * ETH_TO_LUV_RATE;
         
         // Mint LUV tokens to recipient
         loveToken.mint(recipient, luvAmount);
@@ -198,6 +198,6 @@ contract BurnMint {
      * @return luvAmount Equivalent LUV amount
      */
     function calculateLuvAmount(uint256 ethAmount) external pure returns (uint256 luvAmount) {
-        return (ethAmount * ETH_TO_LUV_RATE) / 1 ether;
+        return ethAmount * ETH_TO_LUV_RATE;
     }
 }
