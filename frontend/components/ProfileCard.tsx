@@ -16,6 +16,7 @@ interface ProfileCardProps {
 export function ProfileCard({ profileAddress, isActive, onLike, onSkip }: ProfileCardProps) {
     const [metadata, setMetadata] = useState<ProfileMetadata | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
 
     // Fetch IPFS CID from contract
     const { data: profileData } = useReadContract({
@@ -57,13 +58,30 @@ export function ProfileCard({ profileAddress, isActive, onLike, onSkip }: Profil
                     </div>
                 ) : (
                     <>
-                        {/* Profile Image */}
+                        {/* Profile Image Gallery */}
                         <div className="relative h-2/3 group">
                             <img
-                                src={metadata?.image}
+                                src={metadata?.images?.[currentPhotoIndex] || metadata?.image}
                                 alt={metadata?.name}
                                 className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700"
                             />
+
+                            {/* Photo Navigation Dots */}
+                            {metadata?.images && metadata.images.length > 1 && (
+                                <div className="absolute top-4 inset-x-0 flex justify-center gap-1.5 z-10">
+                                    {metadata.images.map((_, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => setCurrentPhotoIndex(idx)}
+                                            className={`h-1.5 rounded-full transition-all ${idx === currentPhotoIndex
+                                                ? 'w-8 bg-white'
+                                                : 'w-1.5 bg-white/40 hover:bg-white/60'
+                                                }`}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+
                             <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/80 to-transparent"></div>
 
                             <div className="absolute bottom-6 left-8">
@@ -86,6 +104,18 @@ export function ProfileCard({ profileAddress, isActive, onLike, onSkip }: Profil
                                     </span>
                                 ))}
                             </div>
+
+                            {/* Profile Prompts */}
+                            {metadata?.prompts && metadata.prompts.length > 0 && (
+                                <div className="space-y-3 mb-6">
+                                    {metadata.prompts.map((prompt, i) => (
+                                        <div key={i} className="bg-white/5 rounded-xl p-4 border border-white/10">
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-pink-400 mb-2">{prompt.question}</p>
+                                            <p className="text-white font-medium text-sm leading-relaxed">{prompt.answer}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
 
                             <p className="text-gray-300 leading-relaxed font-medium line-clamp-2 italic">
                                 "{metadata?.description}"
