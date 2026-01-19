@@ -4,9 +4,13 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
-import { CONTRACTS, PROFILE_REGISTRY_ABI, MATCH_REGISTRY_ABI } from '@/lib/contracts';
+import { CONTRACTS, PROFILE_REGISTRY_ABI } from '@/lib/contracts';
 import { ProfileCard } from '@/components/ProfileCard';
 import { MatchCelebration } from '@/components/MatchCelebration';
+import { ProfileCardSkeleton } from '@/components/Skeletons';
+import { useProfiles } from '@/hooks/useProfile';
+import { useMatchRegistry, useMatchEvents } from '@/hooks/useMatchRegistry';
+import { resolveProfileMetadata } from '@/lib/ipfs-utils';
 
 export default function BrowsePage() {
     const { address, isConnected } = useAccount();
@@ -14,38 +18,29 @@ export default function BrowsePage() {
     const [showMatchCelebration, setShowMatchCelebration] = useState(false);
     const [matchedProfile, setMatchedProfile] = useState<{ name: string; image: string } | null>(null);
 
-    const { writeContract } = useWriteContract();
+    // Use custom hooks
+    const { data: profiles, isLoading: isLoadingProfiles, refetch } = useProfiles(address);
+    const { sendLike, isPending } = useMatchRegistry();
 
-    // Get all active profiles
-    const { data: profiles, isLoading: isLoadingProfiles, refetch } = useReadContract({
-        address: CONTRACTS.ProfileRegistry,
-        abi: PROFILE_REGISTRY_ABI,
-        functionName: 'getActiveProfiles',
-        args: address ? [address] : undefined,
+    // Listen for real match events
+    useMatchEvents(address, async (matchedUserAddress) => {
+        // Fetch matched user's profile metadata
+        try {
+            const metadata = await resolveProfileMetadata('', matchedUserAddress);
+            setMatchedProfile({
+                name: metadata.name,
+                image: metadata.image,
+            });
+            setShowMatchCelebration(true);
+        } catch (error) {
+            console.error('Error fetching matched profile:', error);
+        }
     });
 
     const handleLike = async (profileAddress: `0x${string}`) => {
         try {
-            writeContract({
-                address: CONTRACTS.MatchRegistry,
-                abi: MATCH_REGISTRY_ABI,
-                functionName: 'sendLike',
-                args: [profileAddress],
-                gas: BigInt(200000),
-            });
-
-            // Simulate match detection (in real app, listen to MatchCreated event)
-            // For demo, 30% chance of match
-            if (Math.random() > 0.7 && profiles && profiles[currentIndex]) {
-                // Fetch profile data for celebration
-                setMatchedProfile({
-                    name: 'Anonymous User', // Would be fetched from metadata
-                    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=800'
-                });
-                setShowMatchCelebration(true);
-            }
-
-            // Move to next
+            await sendLike(profileAddress);
+            // Move to next profile
             setCurrentIndex((prev) => prev + 1);
         } catch (error) {
             console.error('Error sending like:', error);

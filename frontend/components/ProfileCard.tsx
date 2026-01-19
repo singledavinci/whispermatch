@@ -3,6 +3,7 @@
 import { useReadContract } from 'wagmi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { CONTRACTS, PROFILE_REGISTRY_ABI } from '@/lib/contracts';
 import { resolveProfileMetadata, ProfileMetadata } from '@/lib/ipfs-utils';
 
@@ -60,10 +61,13 @@ export function ProfileCard({ profileAddress, isActive, onLike, onSkip }: Profil
                     <>
                         {/* Profile Image Gallery */}
                         <div className="relative h-2/3 group">
-                            <img
-                                src={metadata?.images?.[currentPhotoIndex] || metadata?.image}
-                                alt={metadata?.name}
-                                className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700"
+                            <Image
+                                src={metadata?.images?.[currentPhotoIndex] || metadata?.image || ''}
+                                alt={metadata?.name || 'Profile'}
+                                fill
+                                className="object-cover grayscale-[20%] group-hover:grayscale-0 transition-all duration-700"
+                                priority={currentPhotoIndex === 0}
+                                sizes="(max-width: 768px) 100vw, 800px"
                             />
 
                             {/* Photo Navigation Dots */}
