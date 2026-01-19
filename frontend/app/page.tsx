@@ -4,9 +4,25 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAccount } from 'wagmi';
+import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
+import { useState, useEffect } from 'react';
 
 export default function Home() {
   const { isConnected } = useAccount();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  useEffect(() => {
+    // Check if user has seen onboarding
+    const hasSeenOnboarding = localStorage.getItem('whispermatch_onboarding_seen');
+    if (!hasSeenOnboarding) {
+      setShowOnboarding(true);
+    }
+  }, []);
+
+  const handleOnboardingComplete = () => {
+    localStorage.setItem('whispermatch_onboarding_seen', 'true');
+    setShowOnboarding(false);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-rose-900">
@@ -124,6 +140,12 @@ export default function Home() {
           </motion.div>
         </div>
       </main>
+
+      {/* Welcome Onboarding */}
+      <WelcomeOnboarding
+        isVisible={showOnboarding}
+        onComplete={handleOnboardingComplete}
+      />
     </div>
   );
 }

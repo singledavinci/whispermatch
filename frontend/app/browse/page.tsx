@@ -6,10 +6,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { CONTRACTS, PROFILE_REGISTRY_ABI, MATCH_REGISTRY_ABI } from '@/lib/contracts';
 import { ProfileCard } from '@/components/ProfileCard';
+import { MatchCelebration } from '@/components/MatchCelebration';
 
 export default function BrowsePage() {
     const { address, isConnected } = useAccount();
     const [currentIndex, setCurrentIndex] = useState(0);
+    const [showMatchCelebration, setShowMatchCelebration] = useState(false);
+    const [matchedProfile, setMatchedProfile] = useState<{ name: string; image: string } | null>(null);
 
     const { writeContract } = useWriteContract();
 
@@ -31,7 +34,18 @@ export default function BrowsePage() {
                 gas: BigInt(200000),
             });
 
-            // Optimistically move to next
+            // Simulate match detection (in real app, listen to MatchCreated event)
+            // For demo, 30% chance of match
+            if (Math.random() > 0.7 && profiles && profiles[currentIndex]) {
+                // Fetch profile data for celebration
+                setMatchedProfile({
+                    name: 'Anonymous User', // Would be fetched from metadata
+                    image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=800'
+                });
+                setShowMatchCelebration(true);
+            }
+
+            // Move to next
             setCurrentIndex((prev) => prev + 1);
         } catch (error) {
             console.error('Error sending like:', error);
@@ -155,6 +169,13 @@ export default function BrowsePage() {
             {/* Background Decorative Elements */}
             <div className="fixed top-0 right-0 w-[50vw] h-[50vw] bg-pink-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 -z-10"></div>
             <div className="fixed bottom-0 left-0 w-[40vw] h-[40vw] bg-purple-600/5 blur-[100px] rounded-full translate-y-1/2 -translate-x-1/4 -z-10"></div>
+
+            {/* Match Celebration Modal */}
+            <MatchCelebration
+                isVisible={showMatchCelebration}
+                matchedProfile={matchedProfile}
+                onClose={() => setShowMatchCelebration(false)}
+            />
         </div>
     );
 }
