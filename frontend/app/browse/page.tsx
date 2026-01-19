@@ -2,9 +2,10 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useReadContract, useWriteContract } from 'wagmi';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import { CONTRACTS, PROFILE_REGISTRY_ABI, MATCH_REGISTRY_ABI } from '@/lib/contracts';
+import { ProfileCard } from '@/components/ProfileCard';
 
 export default function BrowsePage() {
     const { address, isConnected } = useAccount();
@@ -13,163 +14,147 @@ export default function BrowsePage() {
     const { writeContract } = useWriteContract();
 
     // Get all active profiles
-    const { data: profiles } = useReadContract({
+    const { data: profiles, isLoading: isLoadingProfiles, refetch } = useReadContract({
         address: CONTRACTS.ProfileRegistry,
         abi: PROFILE_REGISTRY_ABI,
         functionName: 'getActiveProfiles',
         args: address ? [address] : undefined,
     });
 
-    const sendLike = async (profileAddress: string) => {
+    const handleLike = async (profileAddress: `0x${string}`) => {
         try {
             writeContract({
                 address: CONTRACTS.MatchRegistry,
                 abi: MATCH_REGISTRY_ABI,
                 functionName: 'sendLike',
-                args: [profileAddress as `0x${string}`],
-                gas: BigInt(200000), // Explicit gas limit
+                args: [profileAddress],
+                gas: BigInt(200000),
             });
 
-            // Move to next profile
+            // Optimistically move to next
             setCurrentIndex((prev) => prev + 1);
         } catch (error) {
             console.error('Error sending like:', error);
         }
     };
 
-    const skipProfile = () => {
+    const handleSkip = () => {
         setCurrentIndex((prev) => prev + 1);
     };
 
     if (!isConnected) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-rose-900 flex items-center justify-center px-6">
-                <div className="text-center">
-                    <h1 className="text-4xl font-bold text-white mb-6">Connect Your Wallet</h1>
-                    <p className="text-gray-300 mb-8">Please connect to browse profiles</p>
-                    <ConnectButton />
+            <div className="min-h-screen bg-gradient-to-br from-[#0a0a0c] via-[#1a1a2e] to-[#0a0a0c] flex flex-col">
+                <header className="p-6">
+                    <a href="/" className="text-2xl font-black bg-gradient-to-r from-pink-500 to-purple-600 text-transparent bg-clip-text">
+                        WHISPERMATCH
+                    </a>
+                </header>
+                <div className="flex-1 flex flex-col items-center justify-center px-6">
+                    <div className="max-w-md w-full bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-12 text-center shadow-2xl">
+                        <div className="w-24 h-24 bg-gradient-to-tr from-pink-500 to-purple-600 rounded-3xl m-auto mb-8 flex items-center justify-center shadow-lg transform rotate-12">
+                            <span className="text-5xl -rotate-12">🔐</span>
+                        </div>
+                        <h1 className="text-3xl font-black text-white mb-4">Discovery Secured</h1>
+                        <p className="text-gray-400 mb-10 leading-relaxed font-medium">
+                            Connect your wallet to begin exploring anonymous matches on the blockchain.
+                        </p>
+                        <div className="transform scale-110">
+                            <ConnectButton label="Unlock Discovery" />
+                        </div>
+                    </div>
                 </div>
             </div>
         );
     }
 
-    const currentProfile = profiles && profiles.length > 0 && currentIndex < profiles.length
-        ? profiles[currentIndex]
-        : null;
-
     return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-rose-900">
-            {/* Header */}
-            <header className="backdrop-blur-md bg-black/20 border-b border-white/10">
-                <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-                    <a href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 text-transparent bg-clip-text">
-                        💗 WhisperMatch
+        <div className="min-h-screen bg-gradient-to-br from-[#0a0a0c] via-[#12121a] to-[#0a0a0c] text-white">
+            {/* Navigation Header */}
+            <header className="backdrop-blur-3xl bg-black/40 border-b border-white/5 fixed top-0 inset-x-0 z-50">
+                <div className="container mx-auto px-8 py-5 flex justify-between items-center uppercase tracking-widest text-[10px] font-black">
+                    <a href="/" className="text-xl bg-gradient-to-r from-pink-500 to-violet-600 text-transparent bg-clip-text">
+                        WhisperMatch
                     </a>
-                    <div className="flex gap-4">
-                        <a href="/profile" className="px-4 py-2 text-white hover:bg-white/10 rounded-lg transition-colors">
-                            My Profile
-                        </a>
-                        <a href="/matches" className="px-4 py-2 text-white hover:bg-white/10 rounded-lg transition-colors">
-                            Matches
-                        </a>
+                    <div className="flex items-center gap-8">
+                        <a href="/profile" className="hover:text-pink-500 transition-colors">My Identity</a>
+                        <a href="/matches" className="hover:text-pink-500 transition-colors">Matches</a>
+                        <div className="h-4 w-[1px] bg-white/10"></div>
                         <ConnectButton />
                     </div>
                 </div>
             </header>
 
-            {/* Main Content */}
-            <main className="container mx-auto px-6 py-12 flex items-center justify-center min-h-[80vh]">
-                {!profiles || profiles.length === 0 ? (
-                    <div className="text-center">
-                        <div className="text-6xl mb-4">😢</div>
-                        <h2 className="text-3xl font-bold text-white mb-4">No Profiles Found</h2>
-                        <p className="text-gray-300 mb-8">Be the first to create a profile!</p>
-                        <a
-                            href="/profile"
-                            className="inline-block px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-2xl hover:shadow-pink-500/50 transition-all duration-300"
-                        >
-                            Create Profile
-                        </a>
-                    </div>
-                ) : currentIndex >= profiles.length ? (
-                    <div className="text-center">
-                        <div className="text-6xl mb-4">🎉</div>
-                        <h2 className="text-3xl font-bold text-white mb-4">You've Seen Everyone!</h2>
-                        <p className="text-gray-300 mb-8">Check back later for new profiles</p>
-                        <button
-                            onClick={() => setCurrentIndex(0)}
-                            className="px-8 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-2xl hover:shadow-pink-500/50 transition-all duration-300"
-                        >
-                            Start Over
-                        </button>
-                    </div>
-                ) : (
-                    <div className="max-w-md w-full">
-                        <motion.div
-                            key={currentIndex}
-                            initial={{ scale: 0.8, opacity: 0, rotateY: -90 }}
-                            animate={{ scale: 1, opacity: 1, rotateY: 0 }}
-                            exit={{ scale: 0.8, opacity: 0, rotateY: 90 }}
-                            transition={{ duration: 0.4 }}
-                            className="bg-white/10 backdrop-blur-md rounded-3xl overflow-hidden border border-white/20 shadow-2xl"
-                        >
-                            {/* Profile Image Placeholder */}
-                            <div className="h-96 bg-gradient-to-br from-pink-500/40 to-purple-600/40 flex items-center justify-center">
-                                <div className="text-9xl">👤</div>
+            {/* Main Visual Content */}
+            <main className="container mx-auto px-6 pt-32 pb-12 flex flex-col items-center justify-center min-h-screen">
+                <div className="relative w-full max-w-md h-[38rem]">
+                    {isLoadingProfiles ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                            <div className="relative w-24 h-24">
+                                <div className="absolute inset-0 border-b-2 border-pink-500 rounded-full animate-spin"></div>
+                                <div className="absolute inset-4 border-r-2 border-purple-500 rounded-full animate-spin [animation-duration:1.5s]"></div>
+                                <div className="absolute inset-8 border-t-2 border-rose-400 rounded-full animate-spin [animation-duration:2s]"></div>
                             </div>
+                            <p className="mt-8 text-pink-300 font-black tracking-widest text-xs uppercase animate-pulse">Syncing Chain...</p>
+                        </div>
+                    ) : !profiles || profiles.length === 0 ? (
+                        <div className="absolute inset-0 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 flex flex-col items-center justify-center p-12 text-center">
+                            <div className="text-6xl mb-6 grayscale opacity-50">🏜️</div>
+                            <h2 className="text-2xl font-black mb-2 uppercase tracking-tighter">The Void is Quiet</h2>
+                            <p className="text-gray-400 font-medium text-sm leading-relaxed mb-10">
+                                You are the pioneer. No other active profiles meet your privacy criteria yet.
+                            </p>
+                            <button
+                                onClick={() => refetch()}
+                                className="px-8 py-3 bg-white text-black font-black rounded-xl text-xs uppercase tracking-widest hover:bg-pink-500 hover:text-white transition-all transform active:scale-95"
+                            >
+                                Re-Scan Network
+                            </button>
+                        </div>
+                    ) : currentIndex >= (profiles?.length || 0) ? (
+                        <div className="absolute inset-0 bg-white/5 backdrop-blur-md rounded-3xl border border-white/10 flex flex-col items-center justify-center p-12 text-center">
+                            <div className="text-6xl mb-6">🌌</div>
+                            <h2 className="text-2xl font-black mb-2 uppercase tracking-tighter">Event Horizon Reached</h2>
+                            <p className="text-gray-400 font-medium text-sm leading-relaxed mb-10">
+                                You've explored every encrypted signal in your vicinity. Check back later for new arrivals.
+                            </p>
+                            <button
+                                onClick={() => setCurrentIndex(0)}
+                                className="px-10 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-black rounded-2xl text-xs uppercase tracking-[0.2em] shadow-2xl shadow-pink-500/20 hover:scale-105 transition-all active:scale-95"
+                            >
+                                Loop Back
+                            </button>
+                        </div>
+                    ) : (
+                        profiles && (
+                            <ProfileCard
+                                key={profiles[currentIndex]}
+                                profileAddress={profiles[currentIndex]}
+                                isActive={true}
+                                onLike={() => handleLike(profiles[currentIndex])}
+                                onSkip={handleSkip}
+                            />
+                        )
+                    )}
+                </div>
 
-                            {/* Profile Info */}
-                            <div className="p-8">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h2 className="text-2xl font-bold text-white">
-                                        {currentProfile?.substring(0, 8)}...
-                                    </h2>
-                                    <span className="text-gray-400 text-sm">
-                                        {currentIndex + 1} / {profiles.length}
-                                    </span>
-                                </div>
-
-                                <p className="text-gray-300 mb-4">
-                                    Profile stored on IPFS - decentralized and private
-                                </p>
-
-                                <div className="flex flex-wrap gap-2 mb-6">
-                                    <span className="px-3 py-1 bg-pink-500/20 text-pink-300 rounded-full text-sm">
-                                        Photography
-                                    </span>
-                                    <span className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-sm">
-                                        Travel
-                                    </span>
-                                    <span className="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-sm">
-                                        Music
-                                    </span>
-                                </div>
-
-                                {/* Action Buttons */}
-                                <div className="flex gap-4">
-                                    <button
-                                        onClick={skipProfile}
-                                        className="flex-1 py-4 bg-white/5 hover:bg-white/10 border border-white/20 text-white font-semibold rounded-xl transition-all duration-300"
-                                    >
-                                        ✕ Skip
-                                    </button>
-                                    <button
-                                        onClick={() => currentProfile && sendLike(currentProfile)}
-                                        className="flex-1 py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-xl hover:shadow-2xl hover:shadow-pink-500/50 transition-all duration-300"
-                                    >
-                                        💗 Like
-                                    </button>
-                                </div>
-                            </div>
-                        </motion.div>
-
-                        {/* Swipe Hint */}
-                        <p className="text-center text-gray-400 text-sm mt-4">
-                            Swipe right to like, left to skip
-                        </p>
+                {/* Progress Indicators */}
+                {profiles && profiles.length > 0 && currentIndex < profiles.length && (
+                    <div className="mt-8 flex gap-1.5 backdrop-blur-md bg-black/40 p-2 rounded-full border border-white/5 shadow-inner">
+                        {profiles.map((_, i) => (
+                            <div
+                                key={i}
+                                className={`h-1.5 transition-all duration-500 rounded-full ${i === currentIndex ? 'w-8 bg-pink-500' : 'w-1.5 bg-white/10'
+                                    }`}
+                            />
+                        ))}
                     </div>
                 )}
             </main>
+
+            {/* Background Decorative Elements */}
+            <div className="fixed top-0 right-0 w-[50vw] h-[50vw] bg-pink-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 -z-10"></div>
+            <div className="fixed bottom-0 left-0 w-[40vw] h-[40vw] bg-purple-600/5 blur-[100px] rounded-full translate-y-1/2 -translate-x-1/4 -z-10"></div>
         </div>
     );
 }

@@ -1,0 +1,62 @@
+/**
+ * IPFS Utility for simulating profile metadata retrieval
+ * In a real-world app, this would use a Gateway or local IPFS node
+ */
+
+export interface ProfileMetadata {
+    name: string;
+    description: string;
+    image: string;
+    interests: string[];
+    age: string;
+    location: string;
+}
+
+// Deterministic random generator based on CID/Address string
+const seedRandom = (str: string) => {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return () => {
+        hash = (hash * 16807) % 2147483647;
+        return (hash - 1) / 2147483646;
+    };
+};
+
+const NAMES = ["Aria", "Julian", "Skyler", "Nova", "Leo", "Maya", "Cassian", "Zoe", "Elara", "Dante"];
+const LOCATIONS = ["Neo Tokyo", "Cyber Berlin", "Cloud City", "Mars Colony", "Digital Oasis", "Meta Paris"];
+const INTERESTS = ["ZK Proofs", "Cybernetics", "Retro-Futurism", "Neon Photography", "Synthwave", "Crypto Art", "DeFi Farming", "Neural Networks"];
+const IMAGES = [
+    "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1548142813-c348350df52b?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1554151228-14d9def656e4?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1520333789090-1afc82db536a?auto=format&fit=crop&q=80&w=800",
+    "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=800"
+];
+
+export async function resolveProfileMetadata(cid: string, address: string): Promise<ProfileMetadata> {
+    // Simulate network delay
+    await new Promise(r => setTimeout(r, 800));
+
+    // For real CIDs that look like JSON (simulated in our profile flow)
+    // We try to parse, but usually we just generate beautiful deterministic data for the demo
+    const rng = seedRandom(address);
+    const pick = (arr: any[]) => arr[Math.floor(rng() * arr.length)];
+
+    // Mix interests
+    const myInterests = [...INTERESTS].sort(() => rng() - 0.5).slice(0, 3);
+
+    return {
+        name: pick(NAMES),
+        description: "Whispering into the void... Match with me to find out more.",
+        image: pick(IMAGES),
+        interests: myInterests,
+        age: Math.floor(rng() * 10 + 20).toString(),
+        location: pick(LOCATIONS)
+    };
+}
