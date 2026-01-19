@@ -198,47 +198,73 @@ contract ProfileRegistry {
     }
 
     /**
-     * @notice Get all active profiles (for browsing)
-     * @dev Returns array of addresses with active profiles
-     * @param viewer Address of the viewer
-     * @return activeProfiles Array of profile owner addresses that viewer can see
+     * @notice Get active profiles for browsing
+     * @dev Returns profiles that meet the viewer's LUV balance requirements
+     * @param viewer Address of the user viewing profiles
+     * @return Array of profile addresses
      */
-    function getActiveProfiles(address viewer) 
-        external 
-        view 
-        returns (address[] memory activeProfiles) 
-    {
+    function getActiveProfiles(address viewer) external view returns (address[] memory) {
+        return getActiveProfilesPaginated(viewer, 0, 50); // Default to first 50
+    }
+
+    /**
+     * @notice Get active profiles with pagination
+     * @dev Returns profiles that meet the viewer's LUV balance requirements
+     * @param viewer Address of the user viewing profiles
+     * @param offset Starting index for pagination
+     * @param limit Maximum number of profiles to return
+     * @return Array of profile addresses
+     */
+    function getActiveProfilesPaginated(
+        address viewer,
+        uint256 offset,
+        uint256 limit
+    ) public view returns (address[] memory) {
+        require(limit > 0 && limit <= 100, "ProfileRegistry: invalid limit");
+        
         uint256 viewerBalance = loveToken.balanceOf(viewer);
         
-        // First pass: count viewable profiles
-        uint256 count = 0;
-        for (uint256 i = 0; i < profileAddresses.length; i++) {
-            address profileOwner = profileAddresses[i];
-            Profile memory profile = profiles[profileOwner];
+        // First, count how many profiles match
+        uint256 matchCount = 0;
+        uint256 profileCount = profileAddresses.length;
+        
+        // Ensure offset is within bounds
+        if (offset >= profileCount) {
+            return new address[](0);
+        }
+
+        for (uint256 i = offset; i < profileCount; i++) {
+            address profileAddr = profileAddresses[i];
             
-            if (profile.isActive && 
-                viewerBalance >= profile.minLuvToView &&
-                profileOwner != viewer) {
-                count++;
+            if (profileAddr != viewer && 
+                profiles[profileAddr].isActive &&
+                viewerBalance >= profiles[profileAddr].minLuvToView) {
+                matchCount++;
             }
         }
         
-        // Second pass: populate array
-        activeProfiles = new address[](count);
-        uint256 index = 0;
-        for (uint256 i = 0; i < profileAddresses.length; i++) {
-            address profileOwner = profileAddresses[i];
-            Profile memory profile = profiles[profileOwner];
+        // Adjust matchCount if it exceeds the limit
+        if (matchCount > limit) {
+            matchCount = limit;
+        }
+
+        // Create result array with exact size
+        address[] memory result = new address[](matchCount);
+        uint256 resultIndex = 0;
+        
+        // Fill result array
+        for (uint256 i = offset; i < profileCount && resultIndex < matchCount; i++) {
+            address profileAddr = profileAddresses[i];
             
-            if (profile.isActive && 
-                viewerBalance >= profile.minLuvToView &&
-                profileOwner != viewer) {
-                activeProfiles[index] = profileOwner;
-                index++;
+            if (profileAddr != viewer && 
+                profiles[profileAddr].isActive &&
+                viewerBalance >= profiles[profileAddr].minLuvToView) {
+                result[resultIndex] = profileAddr;
+                resultIndex++;
             }
         }
         
-        return activeProfiles;
+        return result;
     }
 
     /**
