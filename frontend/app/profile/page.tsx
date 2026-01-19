@@ -2,9 +2,10 @@
 
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
-import { useState, useRef } from 'react';
-import { motion } from 'framer-motion';
+import { useState, useRef, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { CONTRACTS, PROFILE_REGISTRY_ABI } from '@/lib/contracts';
+import { resolveProfileMetadata, ProfileMetadata } from '@/lib/ipfs-utils';
 
 // Pre-set avatar options
 const AVATAR_OPTIONS = [
@@ -27,13 +28,17 @@ export default function ProfilePage() {
     const [imageUrl, setImageUrl] = useState('');
     const [uploadedImage, setUploadedImage] = useState('');
     const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [metadata, setMetadata] = useState<ProfileMetadata | null>(null);
+    const [isLoadingMetadata, setIsLoadingMetadata] = useState(false);
+
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const { writeContract, data: txHash, isPending, error: writeError } = useWriteContract();
     const { isSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
     // Check if user has a profile
-    const { data: hasProfile } = useReadContract({
+    const { data: hasProfile, refetch: refetchExists } = useReadContract({
         address: CONTRACTS.ProfileRegistry,
         abi: PROFILE_REGISTRY_ABI,
         functionName: 'profileExists',
@@ -41,17 +46,50 @@ export default function ProfilePage() {
     });
 
     // Get user's profile if they have one
-    const { data: profileData } = useReadContract({
+    const { data: profileData, refetch: refetchProfile } = useReadContract({
         address: CONTRACTS.ProfileRegistry,
         abi: PROFILE_REGISTRY_ABI,
         functionName: 'getProfile',
         args: address ? [address] : undefined,
     });
 
+    // Sync metadata and form fields
+    useEffect(() => {
+        const fetchMetadata = async () => {
+            if (profileData && profileData[0]) {
+                setIsLoadingMetadata(true);
+                const result = await resolveProfileMetadata(profileData[0], address || '');
+                setMetadata(result);
+
+                // Pre-fill form fields
+                setBio(result.description);
+                setAge(result.age);
+                setInterests(result.interests.join(', '));
+                setImageUrl(result.image);
+
+                setIsLoadingMetadata(false);
+                setIsEditing(false); // Default to view mode if profile exists
+            }
+        };
+
+        if (profileData) {
+            fetchMetadata();
+        } else if (hasProfile === false) {
+            setIsEditing(true); // If no profile, we must be in create mode
+        }
+    }, [profileData, address, hasProfile]);
+
+    useEffect(() => {
+        if (isSuccess) {
+            refetchExists();
+            refetchProfile();
+            setIsEditing(false);
+        }
+    }, [isSuccess]);
+
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            // Convert to base64 for demo (in production, upload to IPFS/Pinata)
             const reader = new FileReader();
             reader.onloadend = () => {
                 const base64 = reader.result as string;
@@ -68,15 +106,14 @@ export default function ProfilePage() {
         setShowAvatarPicker(false);
     };
 
-    const createProfile = async () => {
+    const saveProfile = async () => {
         if (!bio || !age || !interests) {
             alert('Please fill all fields');
             return;
         }
 
         try {
-            // In a real app, upload to IPFS
-            const profileData = {
+            const demoMetadata = {
                 bio,
                 age: parseInt(age),
                 interests: interests.split(',').map(i => i.trim()),
@@ -84,58 +121,37 @@ export default function ProfilePage() {
                 timestamp: Date.now(),
             };
 
-            // Simulate IPFS hash (in production, use actual IPFS upload)
-            const ipfsHash = `Qm${btoa(JSON.stringify(profileData)).substring(0, 44)}`;
+            const ipfsHash = `Qm${btoa(JSON.stringify(demoMetadata)).substring(0, 44)}`;
 
-            await writeContract({
-                address: CONTRACTS.ProfileRegistry,
-                abi: PROFILE_REGISTRY_ABI,
-                functionName: 'createProfile',
-                args: [ipfsHash, BigInt(Math.floor(parseFloat(minLuv) * 1e18))],
-                gas: BigInt(500000), // Explicit gas limit
-            });
+            if (hasProfile) {
+                await writeContract({
+                    address: CONTRACTS.ProfileRegistry,
+                    abi: PROFILE_REGISTRY_ABI,
+                    functionName: 'updateProfile',
+                    args: [ipfsHash],
+                    gas: BigInt(300000),
+                });
+            } else {
+                await writeContract({
+                    address: CONTRACTS.ProfileRegistry,
+                    abi: PROFILE_REGISTRY_ABI,
+                    functionName: 'createProfile',
+                    args: [ipfsHash, BigInt(Math.floor(parseFloat(minLuv) * 1e18))],
+                    gas: BigInt(500000),
+                });
+            }
         } catch (error) {
-            console.error('Error creating profile:', error);
-            alert(`Profile creation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    };
-
-    const updateProfile = async () => {
-        if (!bio) {
-            alert('Please enter your bio');
-            return;
-        }
-
-        try {
-            const profileData = {
-                bio,
-                age: parseInt(age),
-                interests: interests.split(',').map(i => i.trim()),
-                imageUrl,
-                timestamp: Date.now(),
-            };
-
-            const ipfsHash = `Qm${btoa(JSON.stringify(profileData)).substring(0, 44)}`;
-
-            await writeContract({
-                address: CONTRACTS.ProfileRegistry,
-                abi: PROFILE_REGISTRY_ABI,
-                functionName: 'updateProfile',
-                args: [ipfsHash],
-                gas: BigInt(300000), // Explicit gas limit
-            });
-        } catch (error) {
-            console.error('Error updating profile:', error);
-            alert(`Profile update failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            console.error('Error saving profile:', error);
         }
     };
 
     if (!isConnected) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-rose-900 flex items-center justify-center px-6">
-                <div className="text-center">
-                    <h1 className="text-4xl font-bold text-white mb-6">Connect Your Wallet</h1>
-                    <p className="text-gray-300 mb-8">Please connect to create your profile</p>
+            <div className="min-h-screen bg-gradient-to-br from-[#0a0a0c] via-[#1a1a2e] to-[#0a0a0c] flex items-center justify-center px-6">
+                <div className="max-w-md w-full bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-12 text-center shadow-2xl">
+                    <div className="w-20 h-20 bg-pink-500 rounded-3xl m-auto mb-8 flex items-center justify-center text-4xl transform rotate-12">👤</div>
+                    <h1 className="text-3xl font-black text-white mb-4 uppercase tracking-tighter">Identity Locked</h1>
+                    <p className="text-gray-400 mb-8 font-medium">Connect your wallet to establish your anonymous presence.</p>
                     <ConnectButton />
                 </div>
             </div>
@@ -145,258 +161,231 @@ export default function ProfilePage() {
     const displayImage = uploadedImage || imageUrl;
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-purple-900 via-pink-800 to-rose-900">
-            {/* Header */}
-            <header className="backdrop-blur-md bg-black/20 border-b border-white/10">
-                <div className="container mx-auto px-6 py-4 flex justify-between items-center">
-                    <a href="/" className="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 text-transparent bg-clip-text">
-                        💗 WhisperMatch
-                    </a>
-                    <div className="flex gap-4">
-                        <a href="/browse" className="px-4 py-2 text-white hover:bg-white/10 rounded-lg transition-colors">
-                            Browse
-                        </a>
+        <div className="min-h-screen bg-gradient-to-br from-[#0a0a0c] via-[#12121a] to-[#0a0a0c] text-white">
+            <header className="backdrop-blur-3xl bg-black/40 border-b border-white/5 fixed top-0 inset-x-0 z-50">
+                <div className="container mx-auto px-8 py-5 flex justify-between items-center uppercase tracking-widest text-[10px] font-black">
+                    <a href="/" className="text-xl bg-gradient-to-r from-pink-500 to-violet-600 text-transparent bg-clip-text">WhisperMatch</a>
+                    <div className="flex items-center gap-8">
+                        <a href="/browse" className="hover:text-pink-500 transition-colors">Discovery</a>
+                        <a href="/matches" className="hover:text-pink-500 transition-colors">Matches</a>
                         <ConnectButton />
                     </div>
                 </div>
             </header>
 
-            {/* Main Content */}
-            <main className="container mx-auto px-6 py-12">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="max-w-2xl mx-auto"
-                >
-                    <h1 className="text-4xl font-bold text-white mb-4">
-                        {hasProfile ? 'Your Profile' : 'Create Your Profile'}
-                    </h1>
-                    <p className="text-gray-300 mb-8">
-                        {hasProfile
-                            ? 'Update your dating profile stored on IPFS'
-                            : 'Share your interests and find your match! Requires at least 1 LUV token.'
-                        }
-                    </p>
-
-                    {/* Profile Form */}
-                    <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 space-y-6">
-
-                        {/* Profile Image Section */}
-                        <div>
-                            <label className="block text-white font-semibold mb-3">Profile Picture</label>
-
-                            {/* Current image preview */}
-                            <div className="flex justify-center mb-4">
-                                {displayImage ? (
-                                    <motion.img
-                                        initial={{ scale: 0.8, opacity: 0 }}
-                                        animate={{ scale: 1, opacity: 1 }}
-                                        src={displayImage}
-                                        alt="Profile preview"
-                                        className="w-32 h-32 rounded-full object-cover border-4 border-pink-500 shadow-xl"
-                                        onError={(e) => { (e.target as HTMLImageElement).src = AVATAR_OPTIONS[0]; }}
-                                    />
-                                ) : (
-                                    <div className="w-32 h-32 rounded-full bg-gradient-to-br from-pink-500 to-purple-600 flex items-center justify-center text-4xl">
-                                        👤
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Image selection buttons */}
-                            <div className="flex gap-3 flex-wrap justify-center">
-                                <button
-                                    type="button"
-                                    onClick={() => fileInputRef.current?.click()}
-                                    className="px-4 py-2 bg-gradient-to-r from-pink-500 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
-                                >
-                                    📤 Upload Photo
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setShowAvatarPicker(!showAvatarPicker)}
-                                    className="px-4 py-2 bg-white/10 text-white border border-white/20 rounded-lg hover:bg-white/20 transition-all"
-                                >
-                                    🎨 Choose Avatar
-                                </button>
-                                <input
-                                    type="file"
-                                    ref={fileInputRef}
-                                    onChange={handleFileUpload}
-                                    accept="image/*"
-                                    className="hidden"
-                                />
-                            </div>
-
-                            {/* Avatar picker */}
-                            {showAvatarPicker && (
-                                <motion.div
-                                    initial={{ opacity: 0, height: 0 }}
-                                    animate={{ opacity: 1, height: 'auto' }}
-                                    className="mt-4 grid grid-cols-4 gap-3"
-                                >
-                                    {AVATAR_OPTIONS.map((avatar, idx) => (
-                                        <button
-                                            key={idx}
-                                            type="button"
-                                            onClick={() => selectAvatar(avatar)}
-                                            className="relative group"
-                                        >
-                                            <img
-                                                src={avatar}
-                                                alt={`Avatar ${idx + 1}`}
-                                                className="w-full aspect-square rounded-full border-2 border-white/20 hover:border-pink-500 transition-all cursor-pointer hover:scale-110"
-                                            />
-                                        </button>
-                                    ))}
-                                </motion.div>
-                            )}
-
-                            <p className="text-sm text-gray-400 mt-2 text-center">
-                                Choose an avatar or upload your own photo
-                            </p>
-                        </div>
-
-                        {/* Age */}
-                        <div>
-                            <label className="block text-white font-semibold mb-2">Age *</label>
-                            <input
-                                type="number"
-                                value={age}
-                                onChange={(e) => setAge(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500"
-                                placeholder="25"
-                                min="18"
-                                max="100"
-                                required
-                            />
-                        </div>
-
-                        {/* Bio */}
-                        <div>
-                            <label className="block text-white font-semibold mb-2">Bio *</label>
-                            <textarea
-                                value={bio}
-                                onChange={(e) => setBio(e.target.value)}
-                                rows={4}
-                                maxLength={500}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500 resize-none"
-                                placeholder="Tell us about yourself... What makes you unique?"
-                                required
-                            />
-                            <p className="text-sm text-gray-400 mt-1">{bio.length}/500 characters</p>
-                        </div>
-
-                        {/* Interests */}
-                        <div>
-                            <label className="block text-white font-semibold mb-2">Interests (comma-separated) *</label>
-                            <input
-                                type="text"
-                                value={interests}
-                                onChange={(e) => setInterests(e.target.value)}
-                                className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500"
-                                placeholder="Photography, Travel, Music, Cooking"
-                                required
-                            />
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                {interests.split(',').filter(i => i.trim()).map((interest, idx) => (
-                                    <span key={idx} className="px-3 py-1 bg-pink-500/20 text-pink-300 rounded-full text-sm">
-                                        {interest.trim()}
-                                    </span>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Min LUV to View */}
-                        {!hasProfile && (
-                            <div>
-                                <label className="block text-white font-semibold mb-2">
-                                    Minimum LUV Required to View Your Profile
-                                </label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={minLuv}
-                                    onChange={(e) => setMinLuv(e.target.value)}
-                                    className="w-full px-4 py-3 bg-white/5 border border-white/20 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-pink-500"
-                                    placeholder="1"
-                                    min="0"
-                                />
-                                <p className="text-sm text-gray-400 mt-1">
-                                    Set this higher to ensure only serious users can see you
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Error Display */}
-                        {writeError && (
-                            <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
-                                <p className="text-red-300 text-sm">
-                                    ❌ Error: {writeError.message}
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Submit Button */}
-                        <button
-                            onClick={hasProfile ? updateProfile : createProfile}
-                            disabled={isPending || !bio || !age || !interests}
-                            className="w-full py-4 bg-gradient-to-r from-pink-500 to-purple-600 text-white font-semibold rounded-lg hover:shadow-2xl hover:shadow-pink-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isPending
-                                ? 'Processing Transaction...'
-                                : hasProfile
-                                    ? 'Update Profile'
-                                    : 'Create Profile (Requires 1 LUV)'
-                            }
-                        </button>
-
-                        {isSuccess && (
+            <main className="container mx-auto px-6 pt-32 pb-12">
+                <div className="max-w-4xl mx-auto">
+                    <AnimatePresence mode="wait">
+                        {isEditing ? (
                             <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="bg-green-500/20 border border-green-500/50 rounded-lg p-4"
+                                key="edit-mode"
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: 20 }}
+                                className="space-y-8"
                             >
-                                <p className="text-green-300 mb-2">
-                                    ✅ Profile {hasProfile ? 'updated' : 'created'} successfully!
-                                </p>
-                                <a
-                                    href="/browse"
-                                    className="inline-block mt-2 px-6 py-2 bg-white/10 text-white rounded-lg hover:bg-white/20 transition-colors"
-                                >
-                                    Start Browsing Profiles →
-                                </a>
+                                <div className="flex justify-between items-end">
+                                    <div>
+                                        <h1 className="text-5xl font-black mb-2 uppercase tracking-tighter">
+                                            {hasProfile ? 'Update Identity' : 'Establish Identity'}
+                                        </h1>
+                                        <p className="text-pink-400 font-bold tracking-widest text-[10px] uppercase">
+                                            Editing On-Chain Profile Data
+                                        </p>
+                                    </div>
+                                    {hasProfile && (
+                                        <button
+                                            onClick={() => setIsEditing(false)}
+                                            className="px-6 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-widest"
+                                        >
+                                            Cancel
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="bg-white/5 backdrop-blur-2xl rounded-[2.5rem] p-10 border border-white/10 shadow-2xl grid grid-cols-1 md:grid-cols-2 gap-12">
+                                    {/* Left: Media Selection */}
+                                    <div className="space-y-6">
+                                        <div className="relative group">
+                                            <div className="aspect-square rounded-[2rem] overflow-hidden bg-black/40 border-2 border-dashed border-white/10 flex items-center justify-center transition-all group-hover:border-pink-500/50">
+                                                {displayImage ? (
+                                                    <img src={displayImage} alt="Preview" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <span className="text-6xl opacity-20 group-hover:opacity-100 transition-opacity">🖼️</span>
+                                                )}
+                                            </div>
+                                            <div className="mt-6 flex flex-wrap gap-3">
+                                                <button
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="flex-1 py-3 bg-white text-black font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-pink-500 hover:text-white transition-all"
+                                                >
+                                                    Upload Media
+                                                </button>
+                                                <button
+                                                    onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+                                                    className="flex-1 py-3 bg-white/5 border border-white/10 font-black text-[10px] uppercase tracking-widest rounded-xl hover:bg-white/10 transition-all"
+                                                >
+                                                    {showAvatarPicker ? 'Close' : 'Avatars'}
+                                                </button>
+                                                <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+                                            </div>
+                                        </div>
+
+                                        <AnimatePresence>
+                                            {showAvatarPicker && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="grid grid-cols-4 gap-2 overflow-hidden"
+                                                >
+                                                    {AVATAR_OPTIONS.map((avatar, idx) => (
+                                                        <img
+                                                            key={idx}
+                                                            src={avatar}
+                                                            onClick={() => selectAvatar(avatar)}
+                                                            className="w-full aspect-square rounded-xl cursor-pointer border-2 border-transparent hover:border-pink-500 transition-all hover:scale-105"
+                                                        />
+                                                    ))}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+
+                                    {/* Right: Data Entry */}
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <div className="col-span-1">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2 block">Age</label>
+                                                <input
+                                                    type="number"
+                                                    value={age}
+                                                    onChange={(e) => setAge(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none font-bold"
+                                                    placeholder="21"
+                                                />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2 block">Min LUV to View</label>
+                                                <input
+                                                    type="number"
+                                                    value={minLuv}
+                                                    onChange={(e) => setMinLuv(e.target.value)}
+                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none font-bold"
+                                                    placeholder="1.0"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2 block">Identity Tagline</label>
+                                            <textarea
+                                                value={bio}
+                                                onChange={(e) => setBio(e.target.value)}
+                                                rows={3}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none font-medium text-sm resize-none"
+                                                placeholder="Write your anonymous bio..."
+                                            />
+                                        </div>
+
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-2 block">Interests (Comma Separated)</label>
+                                            <input
+                                                type="text"
+                                                value={interests}
+                                                onChange={(e) => setInterests(e.target.value)}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus:border-pink-500 outline-none font-medium"
+                                                placeholder="ZK Proofs, Art, Crypto"
+                                            />
+                                        </div>
+
+                                        <button
+                                            onClick={saveProfile}
+                                            disabled={isPending}
+                                            className="w-full py-5 bg-gradient-to-r from-pink-500 via-rose-500 to-purple-600 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-pink-500/20 active:scale-95 transition-all disabled:opacity-50"
+                                        >
+                                            {isPending ? 'Syncing to Blockchain...' : hasProfile ? 'Update Identity' : 'Anchor Identity (1 LUV)'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="view-mode"
+                                initial={{ opacity: 0, x: 20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                exit={{ opacity: 0, x: -20 }}
+                                className="space-y-12"
+                            >
+                                <div className="flex justify-between items-center">
+                                    <h1 className="text-6xl font-black uppercase tracking-tighter">Identity Core</h1>
+                                    <button
+                                        onClick={() => setIsEditing(true)}
+                                        className="px-8 py-3 bg-pink-500 hover:bg-pink-600 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-pink-500/20 transition-all active:scale-95"
+                                    >
+                                        Modify Signal
+                                    </button>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    {/* Identity Card */}
+                                    <div className="col-span-1">
+                                        <div className="bg-white/5 backdrop-blur-2xl rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
+                                            <div className="aspect-[4/5] relative">
+                                                <img src={metadata?.image} className="w-full h-full object-cover grayscale-[30%]" />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent"></div>
+                                                <div className="absolute bottom-8 left-8">
+                                                    <p className="text-pink-400 font-black text-[10px] uppercase tracking-widest mb-1">Authenticated</p>
+                                                    <h2 className="text-3xl font-black uppercase">{metadata?.name}, {metadata?.age}</h2>
+                                                </div>
+                                            </div>
+                                            <div className="p-8 space-y-4">
+                                                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-white/40">
+                                                    <span>Signal Integrity</span>
+                                                    <span className="text-green-500">100% Verified</span>
+                                                </div>
+                                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                    <div className="w-full h-full bg-pink-500 animate-[loading_2s_ease-in-out_infinite]"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Data Explorer */}
+                                    <div className="col-span-2 space-y-8">
+                                        <div className="bg-white/5 backdrop-blur-2xl rounded-[2.5rem] p-10 border border-white/10">
+                                            <h3 className="text-[10px] font-black uppercase tracking-widest text-pink-400 mb-6">Bio-Signal</h3>
+                                            <p className="text-xl font-medium leading-relaxed italic text-white/90">"{metadata?.description}"</p>
+
+                                            <div className="mt-10 flex flex-wrap gap-3">
+                                                {metadata?.interests.map((interest, i) => (
+                                                    <span key={i} className="px-5 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-bold uppercase tracking-widest text-white/70">
+                                                        {interest}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-8">
+                                            <div className="bg-white/5 rounded-[2rem] p-8 border border-white/10">
+                                                <h4 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4">View Cost</h4>
+                                                <p className="text-3xl font-black">{((profileData?.[4] || 0n) === 0n ? 0 : Number(profileData?.[4]) / 1e18).toFixed(2)} <span className="text-sm text-pink-500">LUV</span></p>
+                                            </div>
+                                            <div className="bg-white/5 rounded-[2rem] p-8 border border-white/10">
+                                                <h4 className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4">Discovery Date</h4>
+                                                <p className="text-xl font-bold">{new Date(Number(profileData?.[1] || 0) * 1000).toLocaleDateString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </motion.div>
                         )}
-
-                        {/* Privacy Notice */}
-                        <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4">
-                            <p className="text-blue-300 text-sm">
-                                🔒 <strong>Your Privacy Matters:</strong> Your profile is stored on IPFS, fully decentralized.
-                                Only users with the required LUV balance can view it.
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Profile Preview */}
-                    {hasProfile && profileData && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="mt-8 bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20"
-                        >
-                            <h2 className="text-2xl font-bold text-white mb-4">Current Profile</h2>
-                            <div className="space-y-2 text-gray-300">
-                                <p><strong>IPFS Hash:</strong> {profileData[0]?.substring(0, 20)}...</p>
-                                <p><strong>Created:</strong> {new Date(Number(profileData[1]) * 1000).toLocaleDateString()}</p>
-                                <p><strong>Last Updated:</strong> {new Date(Number(profileData[2]) * 1000).toLocaleDateString()}</p>
-                                <p><strong>Status:</strong> {profileData[3] ? '🟢 Active' : '🔴 Inactive'}</p>
-                                <p><strong>Min LUV to View:</strong> {(Number(profileData[4]) / 1e18).toFixed(2)} LUV</p>
-                            </div>
-                        </motion.div>
-                    )}
-                </motion.div>
+                    </AnimatePresence>
+                </div>
             </main>
+
+            <div className="fixed top-0 right-0 w-[50vw] h-[50vw] bg-pink-600/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/3 -z-10"></div>
+            <div className="fixed bottom-0 left-0 w-[40vw] h-[40vw] bg-purple-600/5 blur-[100px] rounded-full translate-y-1/2 -translate-x-1/4 -z-10"></div>
         </div>
     );
 }
