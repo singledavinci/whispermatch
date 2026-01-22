@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAccount } from 'wagmi';
 import { WelcomeOnboarding } from '@/components/WelcomeOnboarding';
+import { InstallPrompt } from '@/components/InstallPrompt';
 import { useState, useEffect } from 'react';
 
 export default function Home() {
@@ -146,6 +147,9 @@ export default function Home() {
         isVisible={showOnboarding}
         onComplete={handleOnboardingComplete}
       />
+
+      {/* PWA Install Prompt */}
+      <InstallPrompt />
     </div>
   );
 }
